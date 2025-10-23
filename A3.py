@@ -1,0 +1,126 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from io import StringIO
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import classification_report
+
+# Data set 1: # id:23-23--23-1 
+# Data set 2: # id:23-46-23-1
+
+# commented code splits csv file at the #, and writes them to their own unique csv files
+# with open("week4.csv", "r") as f:
+#     lines = f.readlines()
+
+# splitIndex = [i for i, line in enumerate(lines) if line.startswith("#")][1]
+
+# data1 = "".join(lines[1:splitIndex])
+# data2 = "".join(lines[splitIndex + 1:])
+
+# with open("set1.csv", "w") as f:
+#     f.write(data1)
+
+# with open("set2.csv", "w") as f:
+#     f.write(data2)
+
+# read in data from csv files
+df1 = pd.read_csv("set1.csv")
+df2 = pd.read_csv("set2.csv")
+
+print(df1.head())
+print(df2.head())
+
+# separate out each column for df1
+X1D1 = df1.iloc[:,0]
+X2D1 = df1.iloc[:,1]
+XD1 = np.column_stack((X1D1, X2D1))
+YD1 = df1.iloc[:,2]
+
+# separate out each column for df2
+X1D2 = df2.iloc[:,0]
+X2D2 = df2.iloc[:,1]
+XD2 = np.column_stack((X1D2, X2D2))
+YD2 = df2.iloc[:,2]
+
+xConcD1 = pd.concat([X1D1, X2D1], axis = "columns") # concatenate X1 and X2 from dataset 1
+xConcD2 = pd.concat([X1D2, X2D2], axis = "columns") # concatenate X1 and X2 from dataset 2
+
+x1D1Pos = []
+x1D1Neg = []
+x2D1Pos = []
+x2D1Neg = []
+
+idx = 0
+for i in range(len(YD1)):
+    if(YD1.iloc[idx] == 1):
+        x1D1Pos.insert(idx, X1D1.iloc[idx])
+        x2D1Pos.insert(idx, X2D1.iloc[idx])
+        idx += 1
+    else:
+        x1D1Neg.insert(idx, X1D1.iloc[idx])
+        x2D1Neg.insert(idx, X2D1.iloc[idx])
+        idx += 1
+
+# i) a) augment data set w/ polynomial features, do cross validation & train Logistic regression
+polyOrders = [1, 2, 3, 4, 5]
+cVals = [0.001, 0.1, 1, 10, 100]
+meanErr = []
+stdErr = []
+
+def findBestCDeg(xConcat, YLabl):
+    paramGrid = {
+                "poly__degree": [1, 2, 3, 4, 5],
+                "logReg__C": [0.001, 0.1, 1, 10, 100],
+                "logReg__penalty": ["l2"]
+            }
+    pipeline = Pipeline([
+            ("poly", PolynomialFeatures()),
+            ("logReg", LogisticRegression())
+        ])
+    
+    grid = GridSearchCV (
+        estimator = pipeline,
+        param_grid = paramGrid,
+        scoring = "f1",
+        cv = 5
+    )
+    
+    grid.fit(xConcat, YLabl)
+    print("Best Params: ", grid.best_params_)
+    print("Best F1 Score: ", grid.best_score_, "\n")
+
+    yPred = grid.predict(xConcat)
+    print(classification_report(YLabl, yPred))
+
+    meanF1 = grid.cv_results_["mean_test_score"]
+    stdF1 = grid.cv_results_["std_test_score"]
+    params = grid.cv_results_["params"]
+
+    for deg in polyOrders:
+        degMeans = [mean for mean, param in zip(meanF1, params) if param["poly__degree"] == deg]
+        degSTDs = [std for std, param in zip(stdF1, params) if param["poly__degree"] == deg]
+        plt.errorbar(cVals, degMeans, yerr = degSTDs, label = f"Degree: {deg}")
+    
+    bestC = grid.best_params_["logReg__c"] # look at this
+    bestScore = grid.best_score_
+
+    plt.scatter(bestC, bestScore, color = "red", s = 100, label = "Best Model")
+    plt.xlabel("C Values")
+    plt.ylabel("Mean F1 Scores +- std")
+    plt.xscale("log")
+    plt.title("Cross Validation F1 Score vs C for different Polynomial Degrees")
+    plt.legend()
+    plt.show()
+
+    
+plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
+plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
+plt.show()
+
+
+d1BestParam = findBestCDeg(xConcD1, YD1)
+
+
