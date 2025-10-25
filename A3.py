@@ -4,10 +4,11 @@ import numpy as np
 from io import StringIO
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV, KFold
+from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import classification_report, f1_score, confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.dummy import DummyClassifier
 
 
 # Data set 1: # id:23-23--23-1 
@@ -82,6 +83,24 @@ for i2 in range(len(YD2)):
         x2D2Neg.insert(idx2, X2D2.iloc[idx2])
         idx2 += 1
 
+# plot dataset 1 
+plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
+plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
+plt.xlabel("Feature: X1")
+plt.ylabel("Feature: X2")
+plt.title("Plot for Dataset 1")
+plt.legend()
+plt.show()
+
+# plot dataset 2
+plt.scatter(x1D2Pos, x2D2Pos, c = "yellow", marker = "+", label = "+1")
+plt.scatter(x1D2Neg, x2D2Neg, c = "purple", marker = "_", label = "-1")
+plt.xlabel("Feature: X1")
+plt.ylabel("Feature: X2")
+plt.title("Plot for Dataset 2")
+plt.legend()
+plt.show()
+
 # i) a) augment data set w/ polynomial features, do cross validation & train Logistic regression
 # coded with help from: https://www.mygreatlearning.com/blog/gridsearchcv/
 polyOrders = [1, 2, 3, 4, 5]
@@ -123,7 +142,9 @@ def findBestCDeg(xConcat, YLabl):
         degSTDs = [std for std, param in zip(stdF1, params) if param["poly__degree"] == deg]
         plt.errorbar(cVals, degMeans, yerr = degSTDs, label = f"Degree: {deg}")
     
-    bestC = grid.best_params_["logReg__c"] # look at this
+    bestParams = grid.best_params_
+    bestC =  bestParams["logReg__C"]
+    bestDeg = bestParams["poly__degree"]
     bestScore = grid.best_score_
 
     plt.scatter(bestC, bestScore, color = "red", s = 100, label = "Best Model")
@@ -134,7 +155,11 @@ def findBestCDeg(xConcat, YLabl):
     plt.legend()
     plt.show()
 
+    bestModel = grid.best_estimator_
+    return bestModel, bestC, bestDeg
+
 # i) b) train kNN Classifier on Data
+# coded with help from: https://www.geeksforgeeks.org/machine-learning/understanding-decision-boundaries-in-k-nearest-neighbors-knn/
 kNNVals = [1, 5, 10, 15, 20, 25]
 kf = KFold(n_splits=5, shuffle= True, random_state=42)
 
@@ -151,6 +176,9 @@ def trainKNN(xConcat, YLabl):
             yPred = kNNModel.predict(xTest)
 
             f1Scores.append(f1_score(yTest, yPred))
+        meanF1 = np.mean(f1Scores)
+        meanF1Scores.append(meanF1)
+
         xMinK, xMaxK = xConcat.iloc[:,0].min() - 0.1, xConcat.iloc[:,0].max()
         yMinK, yMaxK = xConcat.iloc[:,1].min() - 0.1, xConcat.iloc[:,1].max()
 
@@ -163,14 +191,14 @@ def trainKNN(xConcat, YLabl):
         
         plt.contourf(xxK, yyK, ZK)
         plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
-        plt.title(f"kNN Decision Boundary (k = {k})") # 5 is placeholder
+        plt.title(f"kNN Decision Boundary (k = {k})")
         plt.xlabel("X1")
         plt.ylabel("X2")
         plt.show() # need tp do something different here
 
-    meanF1 = np.mean(f1Scores)
-    meanF1Scores.append(meanF1)
-    bestK = kNNVals[np.argmax(meanF1Scores)]
+    bestIdx = np.argmax(meanF1Scores)
+    bestK = kNNVals[bestIdx]
+    bestScore = meanF1Scores[bestIdx]
 
     bestkNNModel = KNeighborsClassifier(n_neighbors=bestK).fit(xConcat, YLabl)
 
@@ -192,27 +220,46 @@ def trainKNN(xConcat, YLabl):
     plt.ylabel("X2")
     plt.show()
 
-    return bestkNNModel
+    return bestkNNModel, bestK
+
+# i) c)
+def calcConfMatrix(xConcat, YLabl, polyOrder, cVal, kVal):
+    # confusion matrix for Logistic Regression
+    xTrain, xTest, yTrain, yTest = train_test_split(xConcat, YLabl, test_size = 0.2, random_state=42, shuffle= True)
+    poly = PolynomialFeatures(polyOrder)
+    xTrainPoly = poly.fit_transform(xTrain)
+    xTestPoly = poly.transform(xTest)
+    logRegModel = LogisticRegression(penalty="l2", C = cVal).fit(xTrainPoly, yTrain)
+    yPredLR = logRegModel.predict(xTestPoly)
+
+    print("Logistic Regression\n")
+    print("Confusion Matrix", confusion_matrix(yTest, yPredLR))
+    print("Classification Report", classification_report(yTest, yPredLR))
+
+    dummyLR = DummyClassifier(strategy= "stratified").fit(xTrainPoly, yTrain)
+    dumPredLR = dummyLR.predict(xTestPoly)
+
+    print("Dummy Matrix: ", confusion_matrix(yTest, dumPredLR))
+    print("Dummy Report: ", classification_report(yTest, dumPredLR))
+
+    # confusion matrix for kNN
+    kNNModel = KNeighborsClassifier(n_neighbors=kVal, shuffle = True, random_state = 42).fit(xTrain, yTrain)
+    kPred = kNNModel.predict(xTest)
+
+    print("\nkNN Classifier\n")
+    print("Confusion Matrix: ", confusion_matrix(yTest, kPred))
+    print("Classification Report: ", classification_report(yTest, kPred))
+
+    dummyK = DummyClassifier(strategy= "stratified").fit(xTrain, yTrain)
+    dumPredK = dummyK.predict(xTest)
+
+    print("Dummy Matrix: ", confusion_matrix(yTest, dumPredK))
+    print("Dummy Report: ", classification_report(yTest, dumPredK))
 
 
-# plot dataset 1 
-plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
-plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
-plt.xlabel("Feature: X1")
-plt.ylabel("Feature: X2")
-plt.title("Plot for Dataset 1")
-plt.legend()
-plt.show()
-
-# plot dataset 2
-plt.scatter(x1D2Pos, x2D2Pos, c = "yellow", marker = "+", label = "+1")
-plt.scatter(x1D2Neg, x2D2Neg, c = "purple", marker = "_", label = "-1")
-plt.xlabel("Feature: X1")
-plt.ylabel("Feature: X2")
-plt.title("Plot for Dataset 2")
-plt.legend()
-plt.show()
-
-#d1BestParam = findBestCDeg(xConcD1, YD1)
-d1BestkNN = trainKNN(xConcD1, YD1)
+d1BestLRModel, d1BestC, d1BestPoly = findBestCDeg(xConcD1, YD1)
+# print(f"Best Model: {d1BestLRModel}\n, Best C: {d1BestC}\n, Best Polynomial: {d1BestPoly}") # debugging
+d1BestkNN, bestK = trainKNN(xConcD1, YD1)
+#print("Best kNN: ", d1BestkNN, "Best k ValueL", bestK) # debugging
+d1ConfMatx = calcConfMatrix(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
 
