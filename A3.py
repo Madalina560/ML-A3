@@ -4,9 +4,11 @@ import numpy as np
 from io import StringIO
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, f1_score
+from sklearn.neighbors import KNeighborsClassifier
+
 
 # Data set 1: # id:23-23--23-1 
 # Data set 2: # id:23-46-23-1
@@ -64,7 +66,24 @@ for i in range(len(YD1)):
         x2D1Neg.insert(idx, X2D1.iloc[idx])
         idx += 1
 
+x1D2Pos = []
+x1D2Neg = []
+x2D2Pos = []
+x2D2Neg = []
+
+idx2 = 0
+for i2 in range(len(YD2)):
+    if(YD2.iloc[idx2] == 1):
+        x1D2Pos.insert(idx2, X1D2.iloc[idx2])
+        x2D2Pos.insert(idx2, X2D2.iloc[idx2])
+        idx2 += 1
+    else:
+        x1D2Neg.insert(idx2, X1D2.iloc[idx2])
+        x2D2Neg.insert(idx2, X2D2.iloc[idx2])
+        idx2 += 1
+
 # i) a) augment data set w/ polynomial features, do cross validation & train Logistic regression
+# coded with help from: https://www.mygreatlearning.com/blog/gridsearchcv/
 polyOrders = [1, 2, 3, 4, 5]
 cVals = [0.001, 0.1, 1, 10, 100]
 meanErr = []
@@ -115,12 +134,85 @@ def findBestCDeg(xConcat, YLabl):
     plt.legend()
     plt.show()
 
+# i) b) train kNN Classifier on Data
+kNNVals = [1, 5, 10, 15, 20, 25]
+kf = KFold(n_splits=5, shuffle= True, random_state=42)
+
+def trainKNN(xConcat, YLabl):
+    meanF1Scores = []
+    for k in kNNVals:
+        f1Scores = []
+        for train, test in kf.split(xConcat):
+            xTrain, xTest = xConcat.iloc[train], xConcat.iloc[test]
+            yTrain, yTest = YLabl.iloc[train], YLabl.iloc[test]
+
+            kNNModel = KNeighborsClassifier(n_neighbors = k)
+            kNNModel.fit(xTrain, yTrain)
+            yPred = kNNModel.predict(xTest)
+
+            f1Scores.append(f1_score(yTest, yPred))
+        xMinK, xMaxK = xConcat.iloc[:,0].min() - 0.1, xConcat.iloc[:,0].max()
+        yMinK, yMaxK = xConcat.iloc[:,1].min() - 0.1, xConcat.iloc[:,1].max()
+
+        # plot decision boundaries for each k val
+        xxK, yyK = np.meshgrid(np.linspace(xMinK, xMaxK),
+                             np.linspace(yMinK, yMaxK))
+        
+        ZK = kNNModel.predict(np.c_[xxK.ravel(), yyK.ravel()])
+        ZK = ZK.reshape(xxK.shape)
+        
+        plt.contourf(xxK, yyK, ZK)
+        plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
+        plt.title(f"kNN Decision Boundary (k = {k})") # 5 is placeholder
+        plt.xlabel("X1")
+        plt.ylabel("X2")
+        plt.show() # need tp do something different here
+
+    meanF1 = np.mean(f1Scores)
+    meanF1Scores.append(meanF1)
+    bestK = kNNVals[np.argmax(meanF1Scores)]
+
+    bestkNNModel = KNeighborsClassifier(n_neighbors=bestK).fit(xConcat, YLabl)
+
+
+    xMin, xMax = xConcat.iloc[:,0].min() - 0.1, xConcat.iloc[:,0].max()
+    yMin, yMax = xConcat.iloc[:,1].min() - 0.1, xConcat.iloc[:,1].max()
+
+    xx, yy = np.meshgrid(np.arange(xMin, xMax, 0.01),
+                            np.arange(yMin, yMax, 0.01))
     
+    Z = bestkNNModel.predict(np.c_[xx.ravel(), yy.ravel()])
+    Z = Z.reshape(xx.shape) 
+
+    plt.figure(figsize=(7,6))
+    plt.contourf(xx, yy, Z, alpha = 0.3)
+    plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
+    plt.title(f"Best kNN Decision Boundary (k = {bestK})")
+    plt.xlabel("X1")
+    plt.ylabel("X2")
+    plt.show()
+
+    return bestkNNModel
+
+
+# plot dataset 1 
 plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
 plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
+plt.xlabel("Feature: X1")
+plt.ylabel("Feature: X2")
+plt.title("Plot for Dataset 1")
+plt.legend()
 plt.show()
 
+# plot dataset 2
+plt.scatter(x1D2Pos, x2D2Pos, c = "yellow", marker = "+", label = "+1")
+plt.scatter(x1D2Neg, x2D2Neg, c = "purple", marker = "_", label = "-1")
+plt.xlabel("Feature: X1")
+plt.ylabel("Feature: X2")
+plt.title("Plot for Dataset 2")
+plt.legend()
+plt.show()
 
-d1BestParam = findBestCDeg(xConcD1, YD1)
-
+#d1BestParam = findBestCDeg(xConcD1, YD1)
+d1BestkNN = trainKNN(xConcD1, YD1)
 
