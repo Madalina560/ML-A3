@@ -6,7 +6,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, f1_score, confusion_matrix
+from sklearn.metrics import classification_report, f1_score, confusion_matrix, roc_curve
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.dummy import DummyClassifier
 
@@ -165,6 +165,7 @@ kf = KFold(n_splits=5, shuffle= True, random_state=42)
 
 def trainKNN(xConcat, YLabl):
     meanF1Scores = []
+    stdF1Scores = []
     for k in kNNVals:
         f1Scores = []
         for train, test in kf.split(xConcat):
@@ -176,8 +177,8 @@ def trainKNN(xConcat, YLabl):
             yPred = kNNModel.predict(xTest)
 
             f1Scores.append(f1_score(yTest, yPred))
-        meanF1 = np.mean(f1Scores)
-        meanF1Scores.append(meanF1)
+        meanF1Scores.append(np.mean(f1Scores))
+        stdF1Scores.append(np.std(f1Scores))
 
         xMinK, xMaxK = xConcat.iloc[:,0].min() - 0.1, xConcat.iloc[:,0].max()
         yMinK, yMaxK = xConcat.iloc[:,1].min() - 0.1, xConcat.iloc[:,1].max()
@@ -194,11 +195,13 @@ def trainKNN(xConcat, YLabl):
         plt.title(f"kNN Decision Boundary (k = {k})")
         plt.xlabel("X1")
         plt.ylabel("X2")
-        plt.show() # need tp do something different here
+        plt.show()
 
     bestIdx = np.argmax(meanF1Scores)
     bestK = kNNVals[bestIdx]
+    print("Best k: ", bestK, "\n")
     bestScore = meanF1Scores[bestIdx]
+
 
     bestkNNModel = KNeighborsClassifier(n_neighbors=bestK).fit(xConcat, YLabl)
 
@@ -225,11 +228,11 @@ def trainKNN(xConcat, YLabl):
 # i) c)
 def calcConfMatrix(xConcat, YLabl, polyOrder, cVal, kVal):
     # confusion matrix for Logistic Regression
-    xTrain, xTest, yTrain, yTest = train_test_split(xConcat, YLabl, test_size = 0.2, random_state=42, shuffle= True)
+    xTrain, xTest, yTrain, yTest = train_test_split(xConcat, YLabl, test_size = 0.2, random_state=42)
     poly = PolynomialFeatures(polyOrder)
     xTrainPoly = poly.fit_transform(xTrain)
     xTestPoly = poly.transform(xTest)
-    logRegModel = LogisticRegression(penalty="l2", C = cVal).fit(xTrainPoly, yTrain)
+    logRegModel = LogisticRegression(penalty="l2", C = cVal, random_state=42).fit(xTrainPoly, yTrain)
     yPredLR = logRegModel.predict(xTestPoly)
 
     print("Logistic Regression\n")
@@ -243,7 +246,7 @@ def calcConfMatrix(xConcat, YLabl, polyOrder, cVal, kVal):
     print("Dummy Report: ", classification_report(yTest, dumPredLR))
 
     # confusion matrix for kNN
-    kNNModel = KNeighborsClassifier(n_neighbors=kVal, shuffle = True, random_state = 42).fit(xTrain, yTrain)
+    kNNModel = KNeighborsClassifier(n_neighbors=kVal).fit(xTrain, yTrain)
     kPred = kNNModel.predict(xTest)
 
     print("\nkNN Classifier\n")
@@ -256,10 +259,42 @@ def calcConfMatrix(xConcat, YLabl, polyOrder, cVal, kVal):
     print("Dummy Matrix: ", confusion_matrix(yTest, dumPredK))
     print("Dummy Report: ", classification_report(yTest, dumPredK))
 
+# i) d) Plot ROC curves for Logistic Regression & kNN
+def plotROC(xConcat, YLabl, polyOrder, cVal, kVal):
+    plt.rc("font", size = 18)
+    plt.rcParams["figure.constrained_layout.use"] = True
+    xTrain, xTest, yTrain, yTest = train_test_split(xConcat, YLabl, test_size=0.2, random_state=42)
+    poly = PolynomialFeatures(polyOrder)
+    xTrainPoly = poly.fit_transform(xTrain)
+    xTestPoly = poly.transform(xTest)
+    logRegModel = LogisticRegression(penalty = "l2", C = cVal, random_state=42).fit(xTrainPoly, yTrain)
+
+    kNNModel = KNeighborsClassifier(n_neighbors=kVal).fit(xTrain, yTrain)
+    kPred = kNNModel.predict(xTest)
+
+
+    fprl, tprl, _ = roc_curve(yTest, logRegModel.decision_function(xTestPoly))
+    plt.plot(fprl, tprl)
+    plt.title("ROC Curve for Logistic Regression")
+    plt.xlabel("False Pos Rate")
+    plt.ylabel("True Pos Rate")
+    plt.plot([0, 1], [0, 1], color = "green")
+    plt.show()
+
+    fprk, tprk, _ = roc_curve(yTest, kNNModel.predict_proba(xTest)[:,1])
+    plt.plot(fprk, tprk)
+    plt.title("ROC Curve for kNN")
+    plt.xlabel("False Pos Rate")
+    plt.ylabel("True Pos Rate")
+    plt.plot([0, 1], [0, 1], color = "green")
+    plt.show()
+
+
 
 d1BestLRModel, d1BestC, d1BestPoly = findBestCDeg(xConcD1, YD1)
 # print(f"Best Model: {d1BestLRModel}\n, Best C: {d1BestC}\n, Best Polynomial: {d1BestPoly}") # debugging
 d1BestkNN, bestK = trainKNN(xConcD1, YD1)
 #print("Best kNN: ", d1BestkNN, "Best k ValueL", bestK) # debugging
 d1ConfMatx = calcConfMatrix(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
+d1ROC = plotROC(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
 
