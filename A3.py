@@ -84,22 +84,22 @@ for i2 in range(len(YD2)):
         idx2 += 1
 
 # plot dataset 1 
-plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
-plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
-plt.xlabel("Feature: X1")
-plt.ylabel("Feature: X2")
-plt.title("Plot for Dataset 1")
-plt.legend()
-plt.show()
+# plt.scatter(x1D1Pos, x2D1Pos, c = "red", marker = "+", label = "+1")
+# plt.scatter(x1D1Neg, x2D1Neg, c = "blue", marker = "_", label = "-1")
+# plt.xlabel("Feature: X1")
+# plt.ylabel("Feature: X2")
+# plt.title("Plot for Dataset 1")
+# plt.legend()
+# plt.show()
 
-# plot dataset 2
-plt.scatter(x1D2Pos, x2D2Pos, c = "yellow", marker = "+", label = "+1")
-plt.scatter(x1D2Neg, x2D2Neg, c = "purple", marker = "_", label = "-1")
-plt.xlabel("Feature: X1")
-plt.ylabel("Feature: X2")
-plt.title("Plot for Dataset 2")
-plt.legend()
-plt.show()
+# # plot dataset 2
+# plt.scatter(x1D2Pos, x2D2Pos, c = "yellow", marker = "+", label = "+1")
+# plt.scatter(x1D2Neg, x2D2Neg, c = "purple", marker = "_", label = "-1")
+# plt.xlabel("Feature: X1")
+# plt.ylabel("Feature: X2")
+# plt.title("Plot for Dataset 2")
+# plt.legend()
+# plt.show()
 
 # i) a) augment data set w/ polynomial features, do cross validation & train Logistic regression
 # coded with help from: https://www.mygreatlearning.com/blog/gridsearchcv/
@@ -108,7 +108,7 @@ cVals = [0.001, 0.1, 1, 10, 100]
 meanErr = []
 stdErr = []
 
-def findBestCDeg(xConcat, YLabl):
+def findBestCDeg(xConcat, YLabl, x1Pos, x1Neg, x2Pos, x2Neg, num):
     paramGrid = {
                 "poly__degree": [1, 2, 3, 4, 5],
                 "logReg__C": [0.001, 0.1, 1, 10, 100],
@@ -147,12 +147,25 @@ def findBestCDeg(xConcat, YLabl):
     bestDeg = bestParams["poly__degree"]
     bestScore = grid.best_score_
 
+    # plot error bar 
     plt.scatter(bestC, bestScore, color = "red", s = 100, label = "Best Model")
     plt.xlabel("C Values")
     plt.ylabel("Mean F1 Scores +- std")
     plt.xscale("log")
     plt.title("Cross Validation F1 Score vs C for different Polynomial Degrees")
-    plt.legend()
+    plt.legend(loc = "upper right", bbox_to_anchor = (1.1, 1.1))
+    plt.show()
+
+    # # plot training data vs Predictions
+    plt.figure(figsize=(7, 6)) 
+    plt.scatter(x1Pos, x2Pos, c = "red", marker = "+", label = "Raw Data +1")
+    plt.scatter(x1Neg, x2Neg, c = "blue", marker = "_", label = "Raw Data -1")
+    plt.scatter(xConcat.iloc[:,0], YLabl, c = "green", marker = "d", label = "Training Data")
+    plt.scatter(xConcat.iloc[:,0], yPred, c = "magenta", marker = ".", label = "Prediction Data")
+    plt.xlabel("Feature: X1")
+    plt.ylabel("Feature: X2")
+    plt.title(f"Plot for Dataset {num} vs Predictions")
+    plt.legend(loc = "upper right", bbox_to_anchor = (1.1, 1.1))
     plt.show()
 
     bestModel = grid.best_estimator_
@@ -184,18 +197,20 @@ def trainKNN(xConcat, YLabl):
         yMinK, yMaxK = xConcat.iloc[:,1].min() - 0.1, xConcat.iloc[:,1].max()
 
         # plot decision boundaries for each k val
-        xxK, yyK = np.meshgrid(np.linspace(xMinK, xMaxK),
-                             np.linspace(yMinK, yMaxK))
+        # xxK, yyK = np.meshgrid(np.linspace(xMinK, xMaxK),
+        #                      np.linspace(yMinK, yMaxK))
         
-        ZK = kNNModel.predict(np.c_[xxK.ravel(), yyK.ravel()])
-        ZK = ZK.reshape(xxK.shape)
+        # ZK = kNNModel.predict(np.c_[xxK.ravel(), yyK.ravel()])
+        # ZK = ZK.reshape(xxK.shape)
         
-        plt.contourf(xxK, yyK, ZK)
-        plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
-        plt.title(f"kNN Decision Boundary (k = {k})")
-        plt.xlabel("X1")
-        plt.ylabel("X2")
-        plt.show()
+        # contour = plt.contourf(xxK, yyK, ZK, alpha = 0.6, label = ZK)
+        # cbar = plt.colorbar(contour)
+        # cbar.set_label('Predicted Class')
+        # plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
+        # plt.title(f"kNN Decision Boundary (k = {k})")
+        # plt.xlabel("X1")
+        # plt.ylabel("X2")
+        # plt.show()
 
     bestIdx = np.argmax(meanF1Scores)
     bestK = kNNVals[bestIdx]
@@ -216,7 +231,9 @@ def trainKNN(xConcat, YLabl):
     Z = Z.reshape(xx.shape) 
 
     plt.figure(figsize=(7,6))
-    plt.contourf(xx, yy, Z, alpha = 0.3)
+    bestCont = plt.contourf(xx, yy, Z, alpha = 0.3)
+    cbarB = plt.colorbar(bestCont)
+    cbarB.set_label('Predicted Class')
     plt.scatter(xConcat.iloc[:,0], xConcat.iloc[:,1], c = YLabl)
     plt.title(f"Best kNN Decision Boundary (k = {bestK})")
     plt.xlabel("X1")
@@ -291,14 +308,14 @@ def plotROC(xConcat, YLabl, polyOrder, cVal, kVal):
 
 
 
-d1BestLRModel, d1BestC, d1BestPoly = findBestCDeg(xConcD1, YD1)
-# print(f"Best Model: {d1BestLRModel}\n, Best C: {d1BestC}\n, Best Polynomial: {d1BestPoly}") # debugging
-d1BestkNN, bestK = trainKNN(xConcD1, YD1)
-#print("Best kNN: ", d1BestkNN, "Best k ValueL", bestK) # debugging
-d1ConfMatx = calcConfMatrix(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
-d1ROC = plotROC(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
+# d1BestLRModel, d1BestC, d1BestPoly = findBestCDeg(xConcD1, YD1, x1D1Pos, x1D1Neg, x2D1Pos, x2D1Neg, 1)
+# # print(f"Best Model: {d1BestLRModel}\n, Best C: {d1BestC}\n, Best Polynomial: {d1BestPoly}") # debugging
+# d1BestkNN, bestK = trainKNN(xConcD1, YD1)
+# #print("Best kNN: ", d1BestkNN, "Best k ValueL", bestK) # debugging
+# d1ConfMatx = calcConfMatrix(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
+# d1ROC = plotROC(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
 
-d2BestLRModel , d2BestC, d2BestPoly = findBestCDeg(xConcD2, YD2)
+d2BestLRModel , d2BestC, d2BestPoly = findBestCDeg(xConcD2, YD2, x1D2Pos, x1D2Neg, x2D2Pos, x2D2Neg, 2)
 d2BestkNN, d2BestK = trainKNN(xConcD2, YD2)
 d2ConfMatx = calcConfMatrix(xConcD2, YD2, d2BestPoly, d2BestC, d2BestK)
 d2ROC = plotROC(xConcD2, YD2, d2BestPoly, d2BestC, d2BestK)
