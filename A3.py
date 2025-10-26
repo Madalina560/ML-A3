@@ -298,3 +298,7 @@ d1BestkNN, bestK = trainKNN(xConcD1, YD1)
 d1ConfMatx = calcConfMatrix(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
 d1ROC = plotROC(xConcD1, YD1, d1BestPoly, d1BestC, bestK)
 
+d2BestLRModel , d2BestC, d2BestPoly = findBestCDeg(xConcD2, YD2)
+d2BestkNN, d2BestK = trainKNN(xConcD2, YD2)
+d2ConfMatx = calcConfMatrix(xConcD2, YD2, d2BestPoly, d2BestC, d2BestK)
+d2ROC = plotROC(xConcD2, YD2, d2BestPoly, d2BestC, d2BestK)
